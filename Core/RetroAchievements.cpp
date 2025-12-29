@@ -16,10 +16,19 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <dlfcn.h>
+#include <iostream>
+
+#ifdef __GNUC__
+  #define RC_CLIENT_SUPPORTS_LIBRAINTEGRATION
+#endif
 
 #include "ext/rcheevos/include/rcheevos.h"
 #include "ext/rcheevos/include/rc_client.h"
+
+#ifdef RC_CLIENT_SUPPORTS_RAINTEGRATION
 #include "ext/rcheevos/include/rc_client_raintegration.h"
+#endif
 #include "ext/rcheevos/include/rc_api_user.h"
 #include "ext/rcheevos/include/rc_api_info.h"
 #include "ext/rcheevos/include/rc_api_request.h"
@@ -56,7 +65,19 @@
 
 #endif
 
+#include "ext/rcheevos/include/rc_client_libraintegration.h"
+
+#ifdef RC_CLIENT_SUPPORTS_LIBRAINTEGRATION
+#include <QtCore>
+#include <QtWidgets/QMainWindow>
+#include <QtWidgets/QMenuBar>
+#include <QtWidgets/QMenu>
+#include <QtWidgets/QAction>
+#endif
+
 static const char *const RAINTEGRATION_FILENAME = "RAIntegration.dll";
+
+static const char *const LIBRAINTEGRATION_FILENAME = "libraintegration.so";
 
 static bool HashISOFile(ISOFileSystem *fs, const std::string filename, md5_context *md5) {
 	int handle = fs->OpenFile(filename, FILEACCESS_READ);
@@ -530,6 +551,49 @@ bool RAIntegrationDirty() {
 #endif
 }
 
+#ifdef RC_CLIENT_SUPPORTS_LIBRAINTEGRATION
+static void load_libintegration_callback(int result, const char *error_message, rc_client_t *client, void *userdata) {
+ auto ac = GetI18NCategory(I18NCat::ACHIEVEMENTS);
+
+	// If DLL not present, do nothing. User can still play without the toolkit.
+	switch (result) {
+	case RC_OK:
+	{
+		// DLL was loaded correctly.
+		g_OSD.Show(OSDType::MESSAGE_SUCCESS, ApplySafeSubstitutions(ac->T("%1 loaded."), RAINTEGRATION_FILENAME));
+
+		// rc_client_raintegration_set_console_id(g_rcClient, RC_CONSOLE_PSP);
+		// rc_client_raintegration_set_event_handler(g_rcClient, &raintegration_event_handler);
+		// rc_client_raintegration_set_write_memory_function(g_rcClient, &raintegration_write_memory_handler);
+		// rc_client_raintegration_set_get_game_name_function(g_rcClient, &raintegration_get_game_name_handler);
+
+		// System_RunCallbackInWndProc([](void *vhWnd, void *userdata) {
+		// 	HWND hWnd = reinterpret_cast<HWND>(vhWnd);
+		// 	rc_client_raintegration_rebuild_submenu(g_rcClient, GetMenu(hWnd));
+		// }, nullptr);
+		break;
+	}
+	case RC_MISSING_VALUE:
+		// This is fine, proceeding to login.
+		g_OSD.Show(OSDType::MESSAGE_WARNING, ac->T("RAIntegration is enabled, but %1 was not found."));
+		break;
+	case RC_ABORTED:
+		// This is fine(-ish), proceeding to login.
+		g_OSD.Show(OSDType::MESSAGE_WARNING, ApplySafeSubstitutions("Wrong version of %1?", RAINTEGRATION_FILENAME));
+		break;
+	default:
+		g_OSD.Show(OSDType::MESSAGE_ERROR, StringFromFormat("RAIntegration init failed: %s", error_message));
+		// Bailing.
+		return;
+	}
+
+	// Things are ready to load a game. If the DLL was initialized, calling rc_client_begin_load_game will be redirected
+	// through the DLL so the toolkit has access to the game data. Similarly, things like rc_create_leaderboard_list will
+	// be redirected through the DLL to reflect any local changes made by the user.
+	TryLoginByToken(true);
+}
+#endif
+
 #ifdef RC_CLIENT_SUPPORTS_RAINTEGRATION
 
 static void raintegration_get_game_name_handler(char *buffer, uint32_t buffer_size, rc_client_t *client) {
@@ -726,6 +790,40 @@ bool LoginAsync(const char *username, const char *password) {
 	g_isLoggingIn = true;
 	rc_client_begin_login_with_password(g_rcClient, username, password, &login_password_callback, nullptr);
 	return true;
+}
+
+void SetupIntegrations() {
+	#ifdef RC_CLIENT_SUPPORTS_LIBRAINTEGRATION
+	// void* handle = dlopen("./build/libraintegration.so", RTLD_LAZY);
+	// if (!handle) {
+    // 	g_OSD.Show(OSDType::MESSAGE_ERROR, "ERROR LOADING THIS THING", dlerror(), 5.0f);
+	// } else {
+	// 	typedef void (*PrintHelloSignature)(); // Example function signature
+	// 	PrintHelloSignature print_hello = (PrintHelloSignature)dlsym(handle, "print_hello");
+
+	// 	if (!print_hello) {
+    // 		// handle error
+	// 		g_OSD.Show(OSDType::MESSAGE_ERROR, "no func found", "", 5.0f);
+    // 		dlclose(handle);
+	// 	} else {
+	// 		print_hello();
+	// 		int64_t hWnd = System_GetPropertyInt(SYSPROP_MAIN_WINDOW_HANDLE);
+	// 		QMainWindow* mainWindow = reinterpret_cast<QMainWindow*>(hWnd);
+	// 		// test();
+	// 		// rc_client_begin_load_libraintegration(g_rcClient, NULL, mainWindow, "PPSSPP", PPSSPP_GIT_VERSION, &load_libintegration_callback, mainWindow);
+	// 		// dlclose(handle);
+	// 		std::cout << "Another number: " << mainWindow << std::endl;
+	// 		QMenuBar* menuBar = mainWindow->menuBar();
+	// 		std::cout << "Another number11: " << menuBar << std::endl;
+	// 		QMenu* testMenu = menuBar->addMenu("TESTING");
+	// 		QAction* testAction = testMenu->addAction("test...");
+	// 		g_OSD.Show(OSDType::MESSAGE_INFO, "This is a good message", "This is a good message", "", 5.0f);
+	// 	}
+	// }
+	int64_t hWnd = System_GetPropertyInt(SYSPROP_MAIN_WINDOW_HANDLE);
+	// QMainWindow* mainWindow = reinterpret_cast<QMainWindow*>(hWnd);
+	rc_client_begin_load_libraintegration(g_rcClient, NULL, hWnd, "PPSSPP", PPSSPP_GIT_VERSION, &load_libintegration_callback, NULL);
+#endif
 }
 
 void Logout() {

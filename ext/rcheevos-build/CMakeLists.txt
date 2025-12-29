@@ -26,6 +26,10 @@ set(ALL_SOURCE_FILES
 	${SRC_DIR}/rc_util.c
 	${SRC_DIR}/rc_client.c
 	${SRC_DIR}/rc_client_internal.h
+	${SRC_DIR}/rc_client_external.c
+	${SRC_DIR}/rc_client_external.h
+	${SRC_DIR}/rc_client_libraintegration.c
+	${SRC_DIR}/rc_client_libraintegration_internal.h
 	${SRC_DIR}/rc_version.h
 	${SRC_DIR}/rcheevos/rc_internal.h
 	${SRC_DIR}/rcheevos/rc_validate.h
@@ -42,5 +46,5 @@ set(ALL_SOURCE_FILES
 
 add_library(rcheevos STATIC ${ALL_SOURCE_FILES})
 
-target_compile_definitions(rcheevos PUBLIC RC_DISABLE_LUA)
+target_compile_definitions(rcheevos PUBLIC RC_DISABLE_LUA PRIVATE RC_CLIENT_SUPPORTS_LIBRAINTEGRATION)
 target_include_directories(rcheevos PUBLIC ../rcheevos/include ../rcheevos/src/rapi)

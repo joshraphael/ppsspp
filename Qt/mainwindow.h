@@ -20,6 +20,8 @@
 #include "Core/Config.h"
 #include "Core/System.h"
 #include "Qt/QtMain.h"
+#include "Core/RetroAchievements.h"
+
 
 extern bool g_TakeScreenshot;
 

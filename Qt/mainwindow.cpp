@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <iostream>
 
 #include "mainwindow.h"
 
